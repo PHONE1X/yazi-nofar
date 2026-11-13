@@ -1,0 +1,151 @@
+--- @since 26.5.6
+--- @sync entry
+-- far-mode.yazi -- switches between vim-style and FAR Manager-style keymaps
+-- by atomically swapping the keymap.toml symlink, saving tab/cwd layout,
+-- then quitting so the `y` shell wrapper can relaunch yazi with the new
+-- keymap loaded (yazi itself has no live keymap-reload -- see upstream
+-- sxyazi/yazi#1757).
+--
+-- INCREMENT 2: adds tab/cwd/active-index save+restore. Dual-pane
+-- (split-tabs) state is NOT restored yet -- that's the next increment,
+-- once this layer is confirmed working on its own.
+--
+-- "to_far" is bound from keymap-vim.toml, "to_vim" from keymap-far.toml.
+-- restore() is wired from init.lua via require("far-mode"):setup().
+
+local function config_dir()
+	return os.getenv("YAZI_CONFIG_HOME") or (os.getenv("HOME") .. "/.config/yazi")
+end
+
+local function swap_to(target_file)
+	local dir = config_dir()
+	local link = dir .. "/keymap.toml"
+	local tmp = dir .. "/.keymap.toml.next"
+
+	local _, err = Command("ln"):arg({ "-sfn", target_file, tmp }):output()
+	if err then
+		ya.notify({ title = "far-mode", content = "ln -sfn failed: " .. tostring(err), timeout = 6, level = "error" })
+		return false
+	end
+
+	local ok, rerr = fs.rename(Url(tmp), Url(link))
+	if not ok then
+		ya.notify({ title = "far-mode", content = "fs.rename failed: " .. tostring(rerr), timeout = 6, level = "error" })
+		return false
+	end
+
+	return true
+end
+
+-- Line-based, hand-rolled (no JSON in the sandbox): one "tab\t<cwd>" line
+-- per tab, then "active\t<idx>".
+local function capture_state()
+	local lines = {}
+	for i = 1, #cx.tabs do
+		lines[#lines + 1] = "tab\t" .. tostring(cx.tabs[i].current.cwd)
+	end
+	lines[#lines + 1] = "active\t" .. tostring(cx.tabs.idx)
+	return table.concat(lines, "\n") .. "\n"
+end
+
+local function write_state()
+	local state_file = os.getenv("YAZI_STATE_FILE")
+	if not state_file or state_file == "" then
+		return
+	end
+	local ok, err = fs.write(Url(state_file), capture_state())
+	if not ok then
+		ya.notify({ title = "far-mode", content = "state write failed: " .. tostring(err), timeout = 6, level = "error" })
+	end
+end
+
+-- Presence of the file (any content) after yazi exits is the wrapper's
+-- restart signal; content is irrelevant. Skipped if $YAZI_RESTART_FILE is
+-- unset (no `y` wrapper installed) -- graceful-degrade path.
+local function write_sentinel()
+	local restart_file = os.getenv("YAZI_RESTART_FILE")
+	if not restart_file or restart_file == "" then
+		return false
+	end
+	local ok, err = fs.write(Url(restart_file), "1")
+	if not ok then
+		ya.notify({ title = "far-mode", content = "sentinel write failed: " .. tostring(err), timeout = 6, level = "error" })
+	end
+	return ok
+end
+
+local function switch(target_file)
+	ya.async(function()
+		if not swap_to(target_file) then
+			return
+		end
+		write_state()
+		local wrapped = write_sentinel()
+		if not wrapped then
+			ya.notify({
+				title = "far-mode",
+				content = "Keymap swapped to " .. target_file .. ". No `y` wrapper detected -- quitting now; relaunch yazi manually to pick it up.",
+				timeout = 6,
+			})
+		end
+		ya.emit("quit", {})
+	end)
+end
+
+local function entry(st, job)
+	job = type(job) == "string" and { args = { job } } or job
+	local act = job and job.args and job.args[1]
+
+	if act == "to_far" then
+		switch("keymap-far.toml")
+	elseif act == "to_vim" then
+		switch("keymap-vim.toml")
+	end
+end
+
+-- Called from init.lua at startup: require("far-mode"):setup(). init.lua's
+-- own context is synchronous, so the actual read + restore is deferred into
+-- ya.async(). Reads the state file via `cat` rather than an unconfirmed
+-- fs.read -- Command() is already proven this session, no reason to guess
+-- at a second file-reading API.
+local function setup()
+	local state_file = os.getenv("YAZI_STATE_FILE")
+	if not state_file or state_file == "" then
+		return
+	end
+
+	ya.async(function()
+		local out, err = Command("cat"):arg({ state_file }):output()
+		if err or not out or not out.stdout or out.stdout == "" then
+			return -- nothing to restore (first run, or file never written)
+		end
+
+		local tabs, active = {}, nil
+		for line in out.stdout:gmatch("[^\n]+") do
+			local kind, rest = line:match("^(%a+)\t(.*)$")
+			if kind == "tab" then
+				tabs[#tabs + 1] = rest
+			elseif kind == "active" then
+				active = tonumber(rest)
+			end
+		end
+
+		if #tabs == 0 then
+			return
+		end
+
+		ya.emit("cd", { Url(tabs[1]) })
+		for i = 2, #tabs do
+			ya.emit("tab_create", { Url(tabs[i]) })
+		end
+		if active then
+			ya.emit("tab_switch", { active - 1 })
+		end
+
+		-- one-shot: consume the file so a later plain relaunch (not a
+		-- mode-swap) doesn't re-apply stale layout
+		fs.remove("file", Url(state_file))
+	end)
+end
+
+return { entry = entry, setup = setup }

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# yz — запуск yazi на конфиге без FAR-режима (форк проекта yazi-nofar).
+#
+# Отличия от обычного `y`:
+#   * свой YAZI_CONFIG_HOME (этот каталог), поэтому рабочий ~/.config/yazi
+#     остаётся нетронутым;
+#   * нет перезапуска процесса ради смены раскладки и нет far-mode/far-menu/
+#     far-tree — грузится меньше плагинов;
+#   * каталог, в котором вышли, печатается в stdout (для скриптов), а рыба
+#     `yz.fish` ещё и переходит в него в текущей сессии.
+set -u
+
+here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+CONF="${YAZI_NOFAR_CONFIG:-$here/config}"
+
+if [ ! -f "$CONF/keymap.toml" ]; then
+    echo "yz: не найден конфиг без FAR-режима: $CONF" >&2
+    exit 1
+fi
+
+cwd_file="$(mktemp -t yz-cwd.XXXXXX)"
+trap 'rm -f "$cwd_file"' EXIT
+
+YAZI_CONFIG_HOME="$CONF" command yazi --cwd-file="$cwd_file" "$@"
+rc=$?
+
+if [ -s "$cwd_file" ]; then
+    last="$(cat "$cwd_file")"
+    if [ -n "$last" ] && [ -d "$last" ]; then
+        printf '%s\n' "$last"
+    fi
+fi
+
+exit "$rc"

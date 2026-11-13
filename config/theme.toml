@@ -1,0 +1,28 @@
+[flavor]
+dark = "gruvbox-dark"
+light = "gruvbox-dark"
+
+[filetype]
+# папки: приглушённый бежево-серый gruvbox (fg4), не спорят с именами файлов
+prepend_rules = [
+  { url = "**/[!.]*/", fg = "#a89984" },
+]
+
+[icon]
+# иконки папок: мягкий gruvbox-синий вместо кислотного мятного
+prepend_dirs = [
+  { name = "Downloads",    text = "󰉍", fg = "#83a598" },
+  { name = "Documents",    text = "󰈙", fg = "#83a598" },
+  { name = "Pictures",     text = "󰉏", fg = "#83a598" },
+  { name = "Music",        text = "󰎆", fg = "#83a598" },
+  { name = "Videos",       text = "󰕧", fg = "#83a598" },
+  { name = "WORKSPACE",    text = "󰇄", fg = "#83a598" },
+  { name = "Public",       text = "󰉐", fg = "#83a598" },
+  { name = "Games",        text = "󰊴", fg = "#83a598" },
+  { name = "Phone",        text = "󰄜", fg = "#83a598" },
+  { name = "Google Drive", text = "󰊶", fg = "#83a598" },
+  { name = ".config",      text = "\uf07b", fg = "#83a598" },
+]
+prepend_conds = [
+  { if = "dir", text = "\uf07b", fg = "#83a598" },
+]
