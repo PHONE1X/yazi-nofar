@@ -28,6 +28,17 @@ fi
 
 cmd="yazi"
 
+# Признак режима файлпикера для конфига yazi (plugins/doc-open.yazi):
+# в этом режиме Enter выбирает файл и закрывает yazi, а не открывает его
+# портпротоном/редактором — иначе выбранный .exe улетает в PortProton,
+# а Steam так и не получает путь.
+YAZI_CHOOSER=1
+export YAZI_CHOOSER
+if [ "$directory" = "1" ]; then
+    YAZI_CHOOSER_DIR=1
+    export YAZI_CHOOSER_DIR
+fi
+
 # Заголовок окна зависит от режима, чтобы было понятно, чего от нас хотят.
 if [ "$save" = "1" ]; then
     title="Сохранить файл - выберите файл для перезаписи"

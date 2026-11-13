@@ -26,6 +26,10 @@ filepicker/install.sh              # восстановить файлпикер
 filepicker/install.sh --uninstall
 ```
 
+Enter в файлпикере выбирает файл и закрывает yazi (`YAZI_CHOOSER=1` из обёртки
+переключает `doc-open` на встроенный `open`); без этого выбранный `.exe`
+улетал в PortProton вместо того, чтобы попасть в Steam.
+
 13.11.2026 файлпикер не открывался из Steam: в `hyprland-portals.conf`
 стоял бэкенд `kde` (юнит `plasma-xdg-desktop-portal-kde` замаскирован → портал
 отвечал «unit is masked»), сама обёртка в `~/.config/xdg-desktop-portal-termfilechooser/`

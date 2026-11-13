@@ -70,8 +70,24 @@ local function entry(self)
 	local h = cx.active.current.hovered
 	if not h then return end
 
+	-- Режим файлпикера (yazi запущен обёрткой xdg-desktop-portal-termfilechooser
+	-- с --chooser-file): Enter должен ВЫБРАТЬ файл и закрыть yazi, а не открывать
+	-- его портпротоном/редактором. Встроенный `open` в этом режиме как раз пишет
+	-- путь в chooser-файл и завершает процесс.
+	local chooser = os.getenv("YAZI_CHOOSER") == "1"
+	local dir_mode = os.getenv("YAZI_CHOOSER_DIR") == "1"
+
 	if h.cha.is_dir then
-		ya.emit("enter", { hovered = not self.open_multi })
+		if chooser and dir_mode then
+			ya.emit("open", { hovered = true })
+		else
+			ya.emit("enter", { hovered = not self.open_multi })
+		end
+		return
+	end
+
+	if chooser then
+		ya.emit("open", {})
 		return
 	end
 
