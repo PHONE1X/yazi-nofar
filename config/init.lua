@@ -58,21 +58,11 @@ require("restore"):setup {
 -- ===== PHASE 0 TEST ONLY =====
 -- DISABLED (incompatible): require("dual-pane"):setup()
 
--- split-tabs: preload here so the module (and its SPLIT_TABS global) exists
--- before far-mode's restore runs. Lazily loading it on the first `plugin
--- split-tabs ...` command costs a disk read, which lets that command land out
--- of order during startup restore.
+-- split-tabs: preload so the module (and its SPLIT_TABS global) exists before
+-- anything else at startup; loading it lazily on the first `plugin split-tabs`
+-- call costs a disk read and can land out of order.
 require("split-tabs")
 
--- far-menu: F2 user menu / F9 main menu / F11 plugin commands.
--- setup() with no arguments just keeps the built-in lists; pass tables
--- here (user = {...}, main = {...}) to override them.
-require("far-menu"):setup()
-
--- far-mode: restore tab/cwd layout after a mode-swap relaunch, if any
-require("far-mode"):setup()
-
 -- Apply the saved "start in dual-pane" preference (plugins/openers.yazi),
--- if any -- a no-op when it's "single" (the default) or when far-mode is
--- about to restore a captured mode-swap session of its own.
+-- if any -- a no-op when it's "single" (the default).
 ya.emit("plugin", { "openers", "boot" })

@@ -1,10 +1,10 @@
 --- @since 25.5.31
 
 -- Popup for editing which program opens which file type, AND the state
--- Yazi starts up in (keymap mode, panel layout, hidden files, sort order).
--- Bound to F / Alt+F4, see keymap-vim.toml / keymap-far.toml. <Tab> inside
--- the popup switches between the two pages -- one shortcut, two jobs, so we
--- don't need to hunt for a second free key.
+-- Yazi starts up in (panel layout, hidden files, sort order).
+-- Bound to F, see keymap.toml. <Tab> inside the popup switches between the
+-- two pages -- one shortcut, two jobs, so we don't need to hunt for a second
+-- free key.
 
 ------------------------------------------------------------------ file i/o
 
@@ -176,9 +176,8 @@ end
 
 -- The only setting here with nowhere else to live: dual-pane is a runtime
 -- feature of split-tabs.yazi, not a yazi.toml key, so "start in dual-pane"
--- has to be remembered somewhere of our own. Keymap mode doesn't need an
--- entry -- the keymap.toml symlink itself is already the persisted state.
--- Hidden/sort don't either -- those are patched straight into yazi.toml.
+-- has to be remembered somewhere of our own. Hidden/sort don't -- those are
+-- patched straight into yazi.toml.
 local function startup_path()
 	return config_dir() .. "/startup-data.lua"
 end
@@ -198,12 +197,6 @@ local function save_startup(overrides)
 end
 
 local SORT_BY_OPTIONS = { "natural", "alphabetical", "mtime", "btime", "extension", "size", "random", "none" }
-
-local function current_keymap_mode()
-	local m = os.getenv("YAZI_KEYMAP_MODE")
-	if m and m:find("far", 1, true) then return "far" end
-	return "vim"
-end
 
 -- SYNC: rt.mgr and SPLIT_TABS are live plugin/runtime state.
 -- rt.mgr.* is the yazi.toml *default*, not the live value -- it does not
@@ -234,8 +227,6 @@ end
 local function build_settings_rows()
 	local mgr = get_live_mgr()
 	return {
-		{ key = "keymap", label = "Keymap mode", value = current_keymap_mode(),
-			options = { "vim", "far" }, hint = "relaunches yazi" },
 		{ key = "panels", label = "Panels", value = panels_label(get_dual_raw()),
 			options = { "single", "dual", "dual_preview" } },
 		{ key = "hidden", label = "Hidden files", value = mgr.hidden and "shown" or "hidden",
@@ -291,9 +282,8 @@ end
 
 -- Brings dual-pane to the desired on/off + quick-preview state. spl_activate
 -- is not synchronous from here (it lands as its own later plugin command),
--- so bringing preview up right after it -- like far-mode's restore chain
--- warns about -- can silently no-op if dual-pane isn't actually up yet.
--- Self-re-emitting wait, capped, same technique far-mode.yazi uses.
+-- so bringing preview up right after it can silently no-op if dual-pane isn't
+-- actually up yet. Self-re-emitting wait, capped.
 local function sync_preview_step(act)
 	local want, n = act:match("^sync_preview:(%d):(%d+)$")
 	if not want then return end
@@ -336,11 +326,7 @@ end
 -- old value right after the user picked the new one (and, worse, cycling
 -- again would compute the next step from that stale value).
 local function apply_setting(row, new_value)
-	if row.key == "keymap" then
-		if new_value ~= current_keymap_mode() then
-			ya.emit("plugin", { "far-mode", new_value == "far" and "to_far" or "to_vim" })
-		end
-	elseif row.key == "panels" then
+	if row.key == "panels" then
 		set_panels(new_value, true)
 	else
 		-- hidden / sort_by / sort_dir_first / sort_reverse: patch+apply the
@@ -363,25 +349,11 @@ local function apply_setting(row, new_value)
 end
 
 -- Called once from init.lua on every launch. Only acts if the user asked
--- for something other than the (default) single-pane start, and only when
--- there is nothing for far-mode to restore -- a real, non-empty
--- $YAZI_STATE_FILE means this launch is a mode-swap relaunch with a
--- captured session (including its own dual-pane state), which far-mode
--- itself is about to restore; stepping on that here would race it.
+-- for something other than the (default) single-pane start.
 local function boot()
 	local panels = load_startup().panels
 	if not panels or panels == "single" then return end
-
-	local state_file = os.getenv("YAZI_STATE_FILE")
-	if not state_file or state_file == "" then
-		set_panels(panels, false)
-		return
-	end
-
-	local out, cerr = Command("cat"):arg({ state_file }):output()
-	if cerr or not out or not out.stdout or out.stdout == "" then
-		set_panels(panels, false)
-	end
+	set_panels(panels, false)
 end
 
 --------------------------------------------------------------- popup shell
@@ -529,12 +501,6 @@ function M.do_delete()
 	save_openers(openers)
 end
 
-function M.do_keymap_switch(forward)
-	local row = { key = "keymap", value = current_keymap_mode(), options = { "vim", "far" } }
-	local nv = next_value(row, forward)
-	apply_setting(row, nv)
-end
-
 local function rows_for(page)
 	return page == "settings" and build_settings_rows() or load_openers()
 end
@@ -571,22 +537,9 @@ function M:run_modal()
 			if run then
 				if run == "page" then
 					page = page == "settings" and "openers" or "settings"
-				-- Changing keymap mode always ends in far-mode quitting the
-				-- process (relaunch), which pops yazi's own "unfinished tasks,
-				-- quit anyway?" confirm dialog if our key-listener is still
-				-- running -- it would silently eat the keys meant for that
-				-- dialog, same problem ya.input had. Route it out to the exit
-				-- path like add/edit/delete instead of handling it inline.
-				elseif page == "settings" and (run == "cycle_fwd" or run == "cycle_back") then
-					local row = active_row()
-					if row and row.key == "keymap" then
-						run = "keymap_" .. run
-					end
 				end
 				tx:send(run)
-				if run == "quit" or run == "add" or run == "edit" or run == "delete"
-					or run == "keymap_cycle_fwd" or run == "keymap_cycle_back"
-				then
+				if run == "quit" or run == "add" or run == "edit" or run == "delete" then
 					return
 				end
 			end
@@ -640,9 +593,6 @@ function M:entry(job)
 			M.do_edit()
 		elseif action == "delete" then
 			M.do_delete()
-		elseif action == "keymap_cycle_fwd" or action == "keymap_cycle_back" then
-			M.do_keymap_switch(action == "keymap_cycle_fwd")
-			return -- a relaunch is coming; don't reopen and race its quit-confirm
 		else
 			return
 		end
