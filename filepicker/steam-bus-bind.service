@@ -1,0 +1,13 @@
+# /etc/systemd/system/steam-bus-bind.service
+[Unit]
+Description=Прокинуть шину D-Bus в песочницу Steam (pressure-vessel)
+Before=graphical-session.target
+After=dbus.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/steam-bus-bind
+
+[Install]
+WantedBy=default.target

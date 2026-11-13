@@ -1,0 +1,8 @@
+[filechooser]
+# Своя обёртка (пакетную из /usr/share не берём): она ставит kitty --app-id=termfilechooser,
+# чтобы правило Hyprland делало окно плавающим, и умеет выбор каталога через --cwd-file.
+cmd=/home/void/.config/xdg-desktop-portal-termfilechooser/yazi-wrapper.sh
+create_help_file=0
+default_dir=$HOME
+open_mode=suggested
+save_mode=suggested

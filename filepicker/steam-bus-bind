@@ -1,0 +1,15 @@
+#!/bin/sh
+# Steam (steamwebhelper) работаeт в bubblewrap-песочнице pressure-vessel, где
+# DBUS_SESSION_BUS_ADDRESS указывает на /run/pressure-vessel/bus. Самого сокета
+# Steam не создаёт, поэтому портал файлов (xdg-desktop-portal-termfilechooser,
+# он же Yazi) из Steam недостижим и кнопка "Поиск" молча ничего не делает.
+# Юнит подсовывает мелкую шину Steam сокетом настоящей сессии.
+set -e
+src=/run/user/1000/bus
+dst=/run/pressure-vessel/bus
+
+[ -S "$src" ] || exit 0
+mkdir -p /run/pressure-vessel
+[ -S "$dst" ] || { : > "$dst"; chmod 666 "$dst"; }
+mountpoint -q "$dst" && exit 0
+mount --bind "$src" "$dst"

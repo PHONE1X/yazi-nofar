@@ -14,6 +14,25 @@
 Сам бинарник yazi не пересобирается: FAR-режим живёт в конфиге, а не в
 приложении, так что пересборка ничего бы не изменила.
 
+## Файлпикер (yazi вместо системного диалога)
+
+`filepicker/` — вся система «yazi как файлпикер»: обёртка
+`yazi-wrapper.sh`, конфиг портала, `hyprland-portals.conf`
+(`FileChooser = termfilechooser`), drop-in с `WAYLAND_DISPLAY` и юнит
+`steam-bus-bind` (шина D-Bus в песочницу Steam).
+
+```
+filepicker/install.sh              # восстановить файлпикер (нужен sudo)
+filepicker/install.sh --uninstall
+```
+
+13.11.2026 файлпикер не открывался из Steam: в `hyprland-portals.conf`
+стоял бэкенд `kde` (юнит `plasma-xdg-desktop-portal-kde` замаскирован → портал
+отвечал «unit is masked»), сама обёртка в `~/.config/xdg-desktop-portal-termfilechooser/`
+отсутствовала (остался только `.bak`), а `/run/pressure-vessel` не существовал.
+После восстановления: `FileChooser = termfilechooser`, обёртка на месте,
+`steam-bus-bind` перезапущен.
+
 ## Перенос на рабочий конфиг
 
 13.11.2026 этот конфиг перенесён в `~/.config/yazi` (старый с FAR — в бэкапе
