@@ -66,6 +66,18 @@ local function setup(self, opts)
 	self.editor = opts.editor or "nvim"
 end
 
+-- Расширения, которые открываем редактором. Всё, чего нет ни здесь, ни в
+-- списке опенеров (F), уходит системным ассоциациям (xdg-open), а не в nvim:
+-- иначе .torrent/.iso и прочее открывались как текст.
+local TEXT_EXT = {}
+for _, e in ipairs {
+	"txt", "md", "markdown", "rst", "log", "conf", "cfg", "ini", "toml", "yaml", "yml",
+	"json", "jsonc", "xml", "csv", "tsv", "lua", "py", "sh", "bash", "zsh", "fish",
+	"c", "h", "cc", "cpp", "hpp", "rs", "go", "js", "ts", "jsx", "tsx", "css", "scss",
+	"html", "htm", "php", "java", "kt", "rb", "pl", "sql", "service", "desktop", "env",
+	"diff", "patch", "tex", "org", "nix", "vim", "el", "ex", "srt", "ass", "vtt",
+} do TEXT_EXT[e] = true end
+
 local function entry(self)
 	local h = cx.active.current.hovered
 	if not h then return end
@@ -93,20 +105,26 @@ local function entry(self)
 
 	local ext = h.name:match("%.([^.]+)$")
 	ext = ext and ext:lower() or ""
+	-- именно tostring(Url): .path отдаёт userdata, и Command:arg() на нём падает
 	local path = tostring(h.url)
 	local rule = build_lookup(load_data_file(data_path()) or DEFAULT_OPENERS)[ext]
-
+	local args = {}
 	if rule then
-		local args = {}
 		for _, a in ipairs(rule.args or {}) do args[#args + 1] = a end
 		args[#args + 1] = path
 		local _, err = Command(rule.cmd):arg(args):spawn()
 		if err then fail(rule.cmd, err) end
-	else
-		-- всё, для чего нет правила, считаем текстом и отдаём редактору;
-		-- TUI-редактору нужен терминал yazi, поэтому через shell --block
+	elseif TEXT_EXT[ext] then
+		-- текстовые файлы — в редактор (TUI-редактору нужен терминал yazi,
+		-- поэтому через shell --block)
 		local editor = self.editor or "nvim"
 		ya.emit("shell", { editor .. " " .. ya.quote(path), block = true })
+	else
+		-- всё остальное (torrent, iso, deb и т.п.) — системным ассоциациям.
+		-- Встроенный open звать нельзя: на этой машине он теряет путь и запускает
+		-- xdg-open без аргументов, поэтому зовём xdg-open сами, с путём.
+		local _, err = Command("xdg-open"):arg({ path }):spawn()
+		if err then fail("xdg-open", err) end
 	end
 end
 
