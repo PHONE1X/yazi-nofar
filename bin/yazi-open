@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Открыть Yazi в новом окне kitty — так его запускают ярлык yazi.desktop
+# (xdg-open папки, «Открыть папку» в Steam и т.п.) и сервис yazi-fm1
+# («Показать в папке» из Telegram, Firefox, Chromium).
+#
+#   yazi-open [--dry-run] [путь | file://URI ...]
+#
+# Папка — открывается она. Файл — открывается его папка, курсор на файле.
+# Несколько аргументов — берётся первый. --dry-run только печатает команду.
+set -u
+
+dry=0
+if [ "${1:-}" = "--dry-run" ]; then
+    dry=1
+    shift
+fi
+
+target="${1:-$HOME}"
+case "$target" in
+    file://*)
+        target="${target#file://}"
+        target="${target#localhost}"
+        # %XX -> байт (URI из D-Bus и .desktop приходят закодированными)
+        target="$(printf '%b' "${target//%/\\x}")"
+        ;;
+esac
+[ -e "$target" ] || target="$HOME"
+
+# Запуск из D-Bus/systemd иногда идёт без WAYLAND_DISPLAY — тогда kitty не
+# стартует («GLFW initialization failed»). Берём сокет композитора сами.
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    for s in "$XDG_RUNTIME_DIR"/wayland-[0-9]*; do
+        case "$s" in *.lock) continue ;; esac
+        [ -S "$s" ] && export WAYLAND_DISPLAY="${s##*/}" && break
+    done
+fi
+
+cmd=(kitty --app-id=yazi --title=Yazi -e yazi "$target")
+
+if [ "$dry" = 1 ]; then
+    printf '%q ' "${cmd[@]}"
+    echo
+    exit 0
+fi
+
+exec setsid -f "${cmd[@]}" >/dev/null 2>&1 </dev/null

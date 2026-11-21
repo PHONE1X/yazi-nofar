@@ -1,4 +1,12 @@
-# кастомные настройки 
+# Основной yazi (файловый менеджер). Файлпикер берёт этот же файл по ссылке
+# из ~/.config/yazi-picker, но клавиши у него свои.
+#
+# Enter/l открывают файлы через плагин doc-open (список «чем что открывать»
+# правится попапом F). Правила ниже работают для o / O («Открыть с помощью…»).
+# В yazi 26 путь подставляется как %s (все выбранные) или %s1 (первый).
+# Старое "$@" больше не работает: программа получала пустой список и
+# открывалась без файла.
+
 [mgr]
 show_hidden = true
 ratio = [1, 4, 3]
@@ -7,12 +15,17 @@ sort_dir_first = true
 sort_reverse = true
 linemode = "size"
 
-# zip
+# архивы в превью — список содержимого (ouch)
 [[plugin.prepend_previewers]]
 mime = "application/{*zip,tar,bzip2,7z*,rar,xz,zstd,java-archive}"
 run  = "ouch"
 
-# git status (значки git у файлов в списке) — было в package.toml, но не установлено
+# markdown в превью — свёрстанный текст (glow), а не исходник
+[[plugin.prepend_previewers]]
+url = "*.{md,markdown}"
+run = 'piper -- CLICOLOR_FORCE=1 glow -w=$w -s=dark "$1"'
+
+# git status (значки git у файлов в списке)
 [[plugin.prepend_fetchers]]
 url   = "*"
 run   = "git"
@@ -24,80 +37,78 @@ run   = "git"
 group = "git"
 
 [opener]
-play = [
-    { run = 'haruna "$@"', orphan = true, for = "unix" }
-]
 edit = [
-    { run = 'nvim "$@"', block = true, for = "unix" }
+	{ run = "nvim %s", block = true, desc = "nvim", for = "unix" },
 ]
 view = [
-    { run = 'gwenview "$@"', orphan = true, for = "unix" }
+	{ run = "gwenview %s", orphan = true, desc = "Gwenview", for = "unix" },
 ]
-libredraw = [
-    { run = 'libreoffice --draw "$@"', orphan = true, for = "unix" }
+play = [
+	{ run = "haruna %s", orphan = true, desc = "Haruna", for = "unix" },
+	{ run = "mpv %s", orphan = true, desc = "mpv", for = "unix" },
+]
+listen = [
+	{ run = "mpv --player-operation-mode=pseudo-gui %s", orphan = true, desc = "mpv", for = "unix" },
+]
+okular = [
+	{ run = "okular %s", orphan = true, desc = "Okular", for = "unix" },
 ]
 librewriter = [
-    { run = 'libreoffice --writer "$@"', orphan = true, for = "unix" }
+	{ run = "libreoffice --writer %s", orphan = true, desc = "LibreOffice Writer", for = "unix" },
 ]
 librecalc = [
-    { run = 'libreoffice --calc "$@"', orphan = true, for = "unix" }
+	{ run = "libreoffice --calc %s", orphan = true, desc = "LibreOffice Calc", for = "unix" },
 ]
 libreimpress = [
-    { run = 'libreoffice --impress "$@"', orphan = true, for = "unix" }
+	{ run = "libreoffice --impress %s", orphan = true, desc = "LibreOffice Impress", for = "unix" },
+]
+libredraw = [
+	{ run = "libreoffice --draw %s", orphan = true, desc = "LibreOffice Draw", for = "unix" },
 ]
 portproton = [
-    { run = 'portproton "$@"', orphan = true, desc = "PortProton", for = "unix" }
+	{ run = "portproton %s1", orphan = true, desc = "PortProton", for = "unix" },
 ]
 extract = [
-    { run = 'ouch decompress "$@"', desc = "Ouch Extract", for = "unix" }
+	{ run = "ouch decompress %s", desc = "Распаковать сюда (ouch)", for = "unix" },
 ]
 extract_7z = [
-    { run = '7z x "$@"', desc = "7z Extract (fallback)", for = "unix" }
+	{ run = "7z x %s1", desc = "Распаковать сюда (7z)", for = "unix" },
 ]
 open = [
-    { run = 'xdg-open "$@"', desc = "Open", for = "unix" }
-]
-
-okular = [
-    { run = 'okular "$@"', orphan = true, desc = "Okular", for = "unix" }
+	{ run = "xdg-open %s1", desc = "Системная программа (xdg-open)", for = "unix" },
 ]
 
 [open]
 prepend_rules = [
-    # 1. ПРИОРИТЕТ: EXE по расширению
-    { url = "*.{exe,EXE,msi,MSI,bat,lnk}", use = [ "portproton", "extract" ] },
+	# 1. Windows-программы по расширению (до MIME: у .exe он бывает обманчивым)
+	{ url = "*.{exe,EXE,msi,MSI,bat,lnk}", use = [ "portproton", "extract" ] },
+	{ mime = "application/microsoft.portable-executable", use = "portproton" },
+	{ mime = "application/x-ms-dos-executable", use = "portproton" },
+	{ mime = "application/x-msi", use = "portproton" },
+	{ mime = "application/x-wine-extension-exe", use = "portproton" },
 
-    # 2. EXE по MIME-типам
-    { mime = "application/microsoft.portable-executable", use = "portproton" },
-    { mime = "application/x-ms-dos-executable", use = "portproton" },
-    { mime = "application/x-msi", use = "portproton" },
-    { mime = "application/x-wine-extension-exe", use = "portproton" },
+	# 2. Медиа
+	{ mime = "image/*", use = [ "view", "open" ] },
+	{ mime = "video/*", use = [ "play", "open" ] },
+	{ mime = "audio/*", use = [ "listen", "open" ] },
 
-    # 3. Изображения
-    { mime = "image/*", use = "view" },
+	# 3. Архивы
+	{ mime = "application/{zip,tar,bzip2,7z*,rar,xz,zstd,java-archive,gzip}", use = [ "extract", "extract_7z", "open" ] },
 
-    # 4. Видео
-    { mime = "video/*", use = "play" },
+	# 4. Документы
+	{ mime = "application/pdf", use = [ "okular", "open" ] },
+	{ url = "*.{doc,docx,odt,rtf}", use = [ "librewriter", "open" ] },
+	{ url = "*.{xls,xlsx,ods,csv}", use = [ "librecalc", "edit", "open" ] },
+	{ url = "*.{ppt,pptx,odp}", use = [ "libreimpress", "open" ] },
+	{ url = "*.{odg,vsd,vsdx}", use = [ "libredraw", "open" ] },
 
-    # 5. Архивы: один явный экстрактор (ouch), без спорного выбора между несколькими опенерами.
-    # Раньше здесь стояли extract+portproton+open одновременно — Enter на архиве заставлял
-    # выбирать один из 4 вариантов. portproton тут был подстраховкой на случай, если архив
-    # на самом деле .exe/инсталлятор с обманчивым MIME — эта подстраховка уже покрыта
-    # правилом №1 выше (по расширению), так что тут она лишняя.
-    # Если ouch не справится с конкретным архивом — распакуй вручную: `:` → `7z x "$1"`,
-    # либо привяжи extract_7z к отдельному хоткею.
-    { mime = "application/{zip,tar,bzip2,7z*,rar,xz,zstd,java-archive}", use = "extract" },
-
-# 6. Офис и PDF
-    { mime = "application/pdf", use = "okular" },
-    { url = "*.{doc,docx,odt}", use = "librewriter" },
-    { url = "*.{xls,xlsx,ods}", use = "librecalc" },
-    { url = "*.{ppt,pptx,odp}", use = "libreimpress" },
-    # 7. Текст
-    { mime = "text/*", use = "edit" }
+	# 5. Текст и пустые файлы
+	{ mime = "text/*", use = [ "edit", "open" ] },
+	{ mime = "application/{json,javascript,x-shellscript,xml,toml,x-yaml}", use = [ "edit", "open" ] },
+	{ mime = "inode/empty", use = [ "edit", "open" ] },
 ]
 
 append_rules = [
-    # 8. Фоллбэк
-    { url = "*", use = "open" }
+	# 6. Всё остальное — системные ассоциации
+	{ url = "*", use = [ "open", "edit" ] },
 ]

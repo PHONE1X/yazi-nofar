@@ -492,20 +492,33 @@ desc = "Archive selected files (password+header+level)"# }}}
 on  = "M"
 run = "plugin mount"# }}}
 
-#drag-and-drop: kitty/iTerm2 have this built into the terminal itself (no
-#binding needed, drag the file straight out of the window). Everywhere
-#else needs an external helper -- `dragon` (AUR: dragon-drag-and-drop, NOT
-#the KDE media player of the same name in the official repos) opens a drop
-#target window you can drag the selection into. {{{
+#перетаскивание мышью — встроенный в kitty 0.50 `kitten dnd` (dragon не нужен).
+#Alt+D: выделенные/подсвеченный файлы можно утащить в Telegram, браузер...
+#Alt+I: окно ждёт файлы, брошенные сюда, и копирует их в текущую папку.
+#Выход — Esc (или само закроется после переноса). {{{
 [[mgr.prepend_keymap]]
 on   = "<A-d>"
-run  = "shell -- dragon -x -i -T %h"
-desc = "Drag-and-drop selection out (needs dragon-drag-and-drop, AUR)"
+run  = "shell --block -- kitten dnd --exit-on=drag-finish,esc-key %s"
+desc = "Перетащить выделенные файлы мышью в другое приложение"
 
 [[mgr.prepend_keymap]]
 on   = "<A-i>"
-run  = 'shell -- dragon --target --and-exit | while IFS= read -r f; do [ -e "$f" ] && cp -r -- "$f" .; done'
-desc = "Drag-and-drop files in (needs dragon-drag-and-drop, AUR)"# }}}
+run  = "shell --block -- kitten dnd --exit-on=drop-finish,esc-key --confirm-drop-overwrite"
+desc = "Принять файлы, перетащенные мышью, в текущую папку"# }}}
+
+#системный буфер обмена (плагин ucp): Alt+C — файлы в буфер как ФАЙЛЫ
+#(Ctrl+V в Telegram/браузере их прикрепит); Alt+V — вставить из буфера:
+#файлы, скопированные в другом приложении, картинку (сохранится .png)
+#или текст (предложит имя нового файла). y по-прежнему копирует ПУТЬ текстом. {{{
+[[mgr.prepend_keymap]]
+on   = "<A-c>"
+run  = "plugin ucp copy notify"
+desc = "Файлы в системный буфер (для Ctrl+V в других приложениях)"
+
+[[mgr.prepend_keymap]]
+on   = "<A-v>"
+run  = "plugin ucp paste notify"
+desc = "Вставить из системного буфера: файлы / картинку / текст"# }}}
 
 #openers + startup settings: which program opens which file type (Enter/l
 #reads this list), plus keymap mode / panels / hidden files / sort order

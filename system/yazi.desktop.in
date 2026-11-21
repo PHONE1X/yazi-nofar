@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Yazi
+GenericName=File Manager
+GenericName[ru]=Файловый менеджер
+Comment=Yazi file manager in a kitty window
+Comment[ru]=Файловый менеджер Yazi в окне kitty
+Icon=yazi
+TryExec=yazi
+Exec=@BIN@/yazi-open %U
+Terminal=false
+MimeType=inode/directory;
+Categories=System;FileTools;FileManager;
+Keywords=File;Manager;Explorer;Browser;Folder;Файлы;Проводник;Папка;
+StartupNotify=true
+StartupWMClass=yazi

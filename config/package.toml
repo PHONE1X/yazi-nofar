@@ -58,6 +58,11 @@ use = "yazi-rs/plugins:toggle-pane"
 rev = "b224ddf"
 hash = "4c0260feb50ea2437380690ffc241da7"
 
+[[plugin.deps]]
+use = "yazi-rs/plugins:piper"
+rev = "1ef5fe0"
+hash = "d1e0499cae5f3aeb628c267616d4b682"
+
 [[flavor.deps]]
 use = "bennyyip/gruvbox-dark"
 rev = "619fdc5"

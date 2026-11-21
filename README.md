@@ -1,69 +1,87 @@
-# yazi-nofar — мой конфиг yazi без FAR-режима
+# yazi-nofar — Yazi как основной файловый менеджер и файлпикер
 
-Форк рабочего `~/.config/yazi` (со всеми правками, включая `y` = копирование
-путей в буфер обмена), из которого вырезано всё «фарное»:
+Весь Yazi этой машины: конфиг файлового менеджера, отдельный конфиг
+системного файлпикера (окна «Открыть» / «Сохранить» в Telegram, браузере,
+Steam), ярлык и сервис «Показать в папке» вместо Dolphin. Восстанавливается
+одной командой.
 
-* плагины `far-mode`, `far-menu`, `far-tree` и вторая раскладка `keymap-far.toml`;
-* переключатель раскладки в попапе `F` (страница Startup settings) и Alt+M / `b f`;
-* перезапуск процесса ради смены режима (вся возня с `YAZI_RESTART_FILE` /
-  `YAZI_STATE_FILE` / `YAZI_KEYMAP_MODE` в fish-функции `y`).
-
-Раскладка осталась одна — vim-подобная (`config/keymap.toml`). `far-bookmarks`
-(закладки на `, ' и Alt+B) не тронут — это не FAR-режим, а просто список папок.
-
-Сам бинарник yazi не пересобирается: FAR-режим живёт в конфиге, а не в
-приложении, так что пересборка ничего бы не изменила.
-
-## Файлпикер (yazi вместо системного диалога)
-
-`filepicker/` — вся система «yazi как файлпикер»: обёртка
-`yazi-wrapper.sh`, конфиг портала, `hyprland-portals.conf`
-(`FileChooser = termfilechooser`), drop-in с `WAYLAND_DISPLAY` и юнит
-`steam-bus-bind` (шина D-Bus в песочницу Steam).
+## Восстановить на новом компьютере
 
 ```
-filepicker/install.sh              # восстановить файлпикер (нужен sudo)
-filepicker/install.sh --uninstall
+git clone https://github.com/PHONE1X/yazi-nofar ~/WORKSPACE/projects/yazi-nofar
+cd ~/WORKSPACE/projects/yazi-nofar
+./install.sh --deps        # пакеты (pacman + paru) и всё остальное
 ```
 
-Enter в файлпикере выбирает файл и закрывает yazi (`YAZI_CHOOSER=1` из обёртки
-переключает `doc-open` на встроенный `open`); без этого выбранный `.exe`
-улетал в PortProton вместо того, чтобы попасть в Steam.
+`./install.sh` без `--deps` — то же без пакетов. `./install.sh --uninstall` — снять.
+Если `~/.config/yazi` уже есть настоящей папкой, скрипт её не тронет и скажет,
+что перенести.
 
-13.11.2026 файлпикер не открывался из Steam: в `hyprland-portals.conf`
-стоял бэкенд `kde` (юнит `plasma-xdg-desktop-portal-kde` замаскирован → портал
-отвечал «unit is masked»), сама обёртка в `~/.config/xdg-desktop-portal-termfilechooser/`
-отсутствовала (остался только `.bak`), а `/run/pressure-vessel` не существовал.
-После восстановления: `FileChooser = termfilechooser`, обёртка на месте,
-`steam-bus-bind` перезапущен.
+## Что где
 
-## Перенос на рабочий конфиг
+| В репозитории | Куда ставится | Что это |
+|---|---|---|
+| `config/` | `~/.config/yazi` (ссылка) | файловый менеджер: клавиши, правила открытия, превью, плагины |
+| `picker/` | `~/.config/yazi-picker` (ссылка) | файлпикер: свои `keymap.toml` и `init.lua`, остальное — ссылки на `config/` |
+| `filepicker/` | `~/.config/xdg-desktop-portal-termfilechooser/` | обёртка портала, его конфиг, `hyprland-portals.conf`, юнит `steam-bus-bind` |
+| `bin/yazi-open` | `~/.local/bin` | открыть Yazi в окне kitty на папке или файле |
+| `bin/yazi-fm1` | `~/.local/bin` + `~/.local/share/dbus-1/services/` | D-Bus `org.freedesktop.FileManager1`: «Показать в папке» -> Yazi |
+| `system/yazi.desktop.in` | `~/.local/share/applications/yazi.desktop` | ярлык; Yazi — программа по умолчанию для папок (`inode/directory`) |
+| `fish/y.fish` | `~/.config/fish/functions/y.fish` (ссылка) | `y` в терминале: yazi, после выхода — `cd` в последнюю папку |
 
-13.11.2026 этот конфиг перенесён в `~/.config/yazi` (старый с FAR — в бэкапе
-`Gdrive:backups/2026-11-13-yazi-nofar/` и в коммите `vendor` этого репозитория),
-fish-функция `y` упрощена: без переменных режима и без перезапуска процесса.
+Конфиги стоят ссылками, поэтому всё, что меняется в самом yazi (попап `F`,
+закладки, `ya pkg add`), сразу видно в `git status` — остаётся закоммитить.
 
-## Установка и запуск
+## Файлпикер
+
+Свой конфиг `~/.config/yazi-picker`: клавиши пикера не попадают в обычный yazi.
+В шапке окна написано, что от тебя хотят и что жать.
+
+| Клавиша | Что делает |
+|---|---|
+| Enter / l / → | папка — войти; файл — выбрать. При сохранении Enter на файле **спрашивает**, заменить ли его |
+| s / Ctrl+S | «Сохранить» — сохранить в папку, где стоишь (спросит имя, предложит исходное); «Папка» — выбрать папку, где стоишь |
+| Пробел | отметить файл (когда можно выбрать несколько) |
+| q | отмена |
+| `'` / `` ` ``, g p, M, T | закладки, телефон (KDE Connect), диски, превью — как в основном yazi |
+
+Режим (`open` / `multi` / `dir` / `save`) выставляет `filepicker/yazi-wrapper.sh`
+через `YAZI_PICK`; выбор пишет `config/plugins/picker.yazi`.
+
+## Основной Yazi: что добавлено
+
+* **Открытие файлов.** Enter/l — плагин `doc-open` (список «чем что открывать»
+  правится попапом `F`). `o` / `O` («Открыть с помощью…») — правила
+  `[open]` в `yazi.toml`. В yazi 26 путь подставляется как `%s`, старое `"$@"`
+  отдавало программе пустой список — из-за этого «Открыть с помощью» не работало.
+* **Превью**: картинки, видео, PDF — встроенные; архивы — `ouch`; markdown —
+  `glow` (через `piper`).
+* **Системный буфер** (плагин `ucp`): **Alt+C** — файлы в буфер как файлы
+  (Ctrl+V в Telegram/браузере их прикрепит), **Alt+V** — вставить из буфера
+  файлы, картинку (.png) или текст (новым файлом). `y` по-прежнему копирует путь
+  текстом.
+* **Мышью**: **Alt+D** — утащить выделенные файлы в другое окно,
+  **Alt+I** — принять брошенные файлы в текущую папку (`kitten dnd` из kitty 0.50).
+* **Google Drive** монтируется, когда заходишь в `~/Google Drive`
+  (`plugins/gdrive-mount.yazi`, общий с файлпикером).
+
+## Проверка
 
 ```
-./install.sh          # ставит команду yz (~/.local/bin/yz + fish-функцию), ~/.config/yazi не трогает
-yz [путь]             # yazi на этом конфиге, каталог выхода подхватывается в fish
-./install.sh --uninstall
+xdg-mime query default inode/directory          # yazi.desktop
+busctl --user status org.freedesktop.FileManager1 | grep CommandLine   # yazi-fm1
+yazi-open --dry-run ~/Downloads                 # команда, которой откроется окно
 ```
 
-Сделать форк основной командой `y`:
+Файлпикер без окна (tmux вместо kitty): `TERMCMD=<скрипт, запускающий команду
+в tmux> filepicker/yazi-wrapper.sh 0 0 1 /tmp/x/new.txt /tmp/out 0`, клавиши —
+`tmux send-keys`, результат — в `/tmp/out`.
 
-```
-cd ~/.config/fish/functions
-cp y.fish y.fish.old && cp ~/WORKSPACE/projects/yazi-nofar/fish/yz.fish y.fish
-```
+## История
 
-## Что проверено
-
-* запускается, ошибок в `~/.local/state/yazi/yazi.log` нет;
-* `y` = пути в буфер (выделение или подсвеченный файл), файлы не открываются;
-* попап `F` (Openers/Startup) открывается без строки «Keymap mode»;
-* dual-pane `b t` включается/выключается;
-* скорость старта не изменилась: 260 мс было / 259 мс стало (медиана 7 замеров) —
-  far-плагины на запуск не влияли, выигрыш только в объёме кода и в отсутствии
-  путаницы раскладок.
+* 13.11.2026 — из рабочего конфига вырезан FAR-режим (коммит `vendor` — копия
+  до этого), файлпикер восстановлен (`FileChooser = termfilechooser`, `steam-bus-bind`).
+* 21.11.2026 — `~/.config/yazi` стал ссылкой на этот репозиторий; отдельный
+  конфиг файлпикера с подсказками и подтверждением перезаписи (до этого Enter
+  на файле в окне «Сохранить» молча его затирал); Yazi — программа для папок и
+  FileManager1 вместо Dolphin; исправлены правила открытия (`%s`).

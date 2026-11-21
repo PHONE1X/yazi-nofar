@@ -1,17 +1,20 @@
 #!/usr/bin/env sh
 # Обёртка Yazi для xdg-desktop-portal-termfilechooser.
 #
-# Скрипт вызывает сам портал, когда любое приложение просит системный диалог
-# выбора файла. Задача обёртки - запустить Yazi в терминале и записать
-# выбранные пути в файл "$out", который потом читает портал.
+# Портал зовёт её, когда приложение просит системный диалог «Открыть» или
+# «Сохранить». Она запускает kitty с yazi на ОТДЕЛЬНОМ конфиге
+# ~/.config/yazi-picker (свои клавиши и подсказка в шапке) и ждёт, пока yazi
+# закроется. Выбранные пути пишутся в "$out", его читает портал; нет файла —
+# значит «Отмена».
 #
-# Порядок аргументов задан порталом (man 5 xdg-desktop-portal-termfilechooser):
-#   $1 multiple  - 0/1, разрешён ли выбор нескольких файлов
-#   $2 directory - 0/1, выбирается каталог, а не файл
-#   $3 save      - 0/1, режим сохранения файла
-#   $4 path      - подсказанный приложением путь (файл или каталог)
-#   $5 out       - файл, в который надо записать выбранные пути
-#   $6 debug     - 0/1, включить трассировку
+# Аргументы задаёт портал (man 5 xdg-desktop-portal-termfilechooser):
+#   $1 multiple  - 0/1, можно выбрать несколько файлов
+#   $2 directory - 0/1, выбирается папка
+#   $3 save      - 0/1, сохранение файла
+#   $4 path      - предложенный приложением путь (папка или файл)
+#   $5 out       - куда записать выбранные пути
+#   $6 debug     - 0/1, трассировка
+# Дальше портал добавляет TERMCMD аргументами — не используем, берём $TERMCMD.
 
 multiple="$1"
 directory="$2"
@@ -26,67 +29,52 @@ if [ "$debug" = "1" ]; then
     set -x
 fi
 
-cmd="yazi"
-
-# Признак режима файлпикера для конфига yazi (plugins/doc-open.yazi):
-# в этом режиме Enter выбирает файл и закрывает yazi, а не открывает его
-# портпротоном/редактором — иначе выбранный .exe улетает в PortProton,
-# а Steam так и не получает путь.
-YAZI_CHOOSER=1
-export YAZI_CHOOSER
-if [ "$directory" = "1" ]; then
-    YAZI_CHOOSER_DIR=1
-    export YAZI_CHOOSER_DIR
-fi
-
-# Заголовок окна зависит от режима, чтобы было понятно, чего от нас хотят.
-if [ "$save" = "1" ]; then
-    title="Сохранить файл - выберите файл для перезаписи"
-elif [ "$directory" = "1" ]; then
-    title="Выбор папки - откройте нужную и нажмите q"
-elif [ "$multiple" = "1" ]; then
-    title="Выбор файлов - пробел отмечает, Enter подтверждает"
-else
-    title="Выбор файла - Enter подтверждает, q отмена"
-fi
-
-# app-id фиксированный: по нему правило Hyprland делает окно плавающим.
-# TERMCMD из конфига, если он задан, имеет приоритет.
-termcmd="${TERMCMD:-kitty --app-id=termfilechooser --title=\"$title\"}"
+# Режим и куда писать результат читают picker/init.lua и plugins/picker.yazi.
+YAZI_CONFIG_HOME="${YAZI_PICKER_CONFIG:-$HOME/.config/yazi-picker}"
+YAZI_PICK_OUT="$out"
+export YAZI_CONFIG_HOME YAZI_PICK_OUT
 
 if [ "$save" = "1" ]; then
-    # Сохранение файла: портал заранее создал файл-заглушку по пути "$path",
-    # пользователь выбирает его (или другой файл) для перезаписи.
-    set -- --chooser-file="$out" "$path"
+    YAZI_PICK=save
 elif [ "$directory" = "1" ]; then
-    # Выбор каталога: --cwd-file запоминает текущий каталог Yazi при выходе,
-    # поэтому достаточно зайти в нужную папку и нажать q.
-    set -- --chooser-file="$out" --cwd-file="$out"".1" "$path"
+    YAZI_PICK=dir
 elif [ "$multiple" = "1" ]; then
-    # Несколько файлов: отмечаем пробелом, подтверждаем Enter.
-    set -- --chooser-file="$out" "$path"
+    YAZI_PICK=multi
 else
-    # Один файл.
-    set -- --chooser-file="$out" "$path"
+    YAZI_PICK=open
 fi
+export YAZI_PICK
 
-# Собираем строку команды вручную, потому что терминал запускается через sh -c.
-command="$termcmd $cmd"
-for arg in "$@"; do
-    # экранируем двойные кавычки внутри пути
-    escaped=$(printf "%s" "$arg" | sed 's/"/\\"/g')
-    command="$command \"$escaped\""
-done
-
-sh -c "$command"
-
-if [ "$directory" = "1" ]; then
-    # Если пользователь ничего не "открыл", а просто вышел из Yazi,
-    # берём каталог из cwd-file как результат выбора.
-    if [ ! -s "$out" ] && [ -s "$out"".1" ]; then
-        cat "$out"".1" > "$out"
-        rm "$out"".1"
-    else
-        rm -f "$out"".1"
+start="$path"
+if [ "$YAZI_PICK" = "save" ]; then
+    # Приложение предлагает папку/имя. Если такой файл уже есть, курсор встанет
+    # на него; если нет — откроется его папка, имя спросим при нажатии s.
+    YAZI_PICK_NAME=$(basename -- "$path")
+    export YAZI_PICK_NAME
+    if [ ! -e "$path" ]; then
+        start=$(dirname -- "$path")
     fi
 fi
+if [ -z "$start" ] || [ ! -e "$start" ]; then
+    start="$HOME"
+fi
+
+case "$YAZI_PICK" in
+    save)  title="Сохранить: $YAZI_PICK_NAME" ;;
+    dir)   title="Выбор папки" ;;
+    multi) title="Выбор файлов" ;;
+    *)     title="Выбор файла" ;;
+esac
+
+# Старый файл результата не должен сойти за выбор.
+rm -f -- "$out"
+
+# Терминал запускается через sh -c, поэтому аргументы экранируем сами.
+quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# app-id фиксированный: по нему правило Hyprland делает окно плавающим.
+termcmd="${TERMCMD:-kitty --app-id=termfilechooser --title=$(quote "$title")}"
+
+sh -c "$termcmd yazi --chooser-file=$(quote "$out") $(quote "$start")"

@@ -11,7 +11,9 @@
 local DEFAULT_OPENERS = {
 	{ ext = { "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "heic", "avif" }, cmd = "gwenview" },
 	{ ext = { "mp4", "mkv", "webm", "avi", "mov", "flv", "wmv", "m4v" }, cmd = "haruna" },
-	{ ext = { "mp3", "flac", "wav", "ogg", "m4a", "opus" }, cmd = "mpv" },
+	-- без pseudo-gui mpv, запущенный не из терминала, играет звук без окна,
+	-- и его нечем остановить
+	{ ext = { "mp3", "flac", "wav", "ogg", "m4a", "opus" }, cmd = "mpv", args = { "--player-operation-mode=pseudo-gui" } },
 	{ ext = { "pdf" }, cmd = "okular" },
 	{ ext = { "doc", "docx", "odt" }, cmd = "libreoffice", args = { "--writer" } },
 	{ ext = { "xls", "xlsx", "ods" }, cmd = "libreoffice", args = { "--calc" } },
@@ -82,24 +84,10 @@ local function entry(self)
 	local h = cx.active.current.hovered
 	if not h then return end
 
-	-- Режим файлпикера (yazi запущен обёрткой xdg-desktop-portal-termfilechooser
-	-- с --chooser-file): Enter должен ВЫБРАТЬ файл и закрыть yazi, а не открывать
-	-- его портпротоном/редактором. Встроенный `open` в этом режиме как раз пишет
-	-- путь в chooser-файл и завершает процесс.
-	local chooser = os.getenv("YAZI_CHOOSER") == "1"
-	local dir_mode = os.getenv("YAZI_CHOOSER_DIR") == "1"
-
+	-- Файлпикер сюда не заходит: у него свой конфиг ~/.config/yazi-picker,
+	-- где Enter привязан к plugins/picker.yazi.
 	if h.cha.is_dir then
-		if chooser and dir_mode then
-			ya.emit("open", { hovered = true })
-		else
-			ya.emit("enter", { hovered = not self.open_multi })
-		end
-		return
-	end
-
-	if chooser then
-		ya.emit("open", {})
+		ya.emit("enter", { hovered = not self.open_multi })
 		return
 	end
 
