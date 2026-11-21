@@ -66,3 +66,26 @@ require("split-tabs")
 -- Apply the saved "start in dual-pane" preference (plugins/openers.yazi),
 -- if any -- a no-op when it's "single" (the default).
 ya.emit("plugin", { "openers", "boot" })
+
+
+-- Google Drive по требованию: rclone-mount поднимается, когда заходишь в
+-- ~/Google Drive, и гасится, когда выходишь оттуда (юнит rclone-drive.service,
+-- автозапуск выключен). Подстраховка — rclone-drive-idle.timer.
+do
+	local GD = os.getenv("HOME") .. "/Google Drive"
+	local up = false
+	ps.sub("cd", function()
+		local cwd = tostring(cx.active.current.cwd)
+		local inside = cwd == GD or cwd:sub(1, #GD + 1) == GD .. "/"
+		if inside and not up then
+			up = true
+			ya.async(function()
+				Command("systemctl"):arg({ "--user", "start", "rclone-drive.service" }):status()
+				ya.emit("reload", {})
+			end)
+		elseif not inside and up then
+			up = false
+			Command("systemctl"):arg({ "--user", "stop", "rclone-drive.service" }):spawn()
+		end
+	end)
+end
