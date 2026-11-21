@@ -2,7 +2,7 @@
 -- Google Drive по требованию: rclone-mount поднимается, когда заходишь в
 -- ~/Google Drive, и гасится, когда выходишь оттуда (юнит rclone-drive.service,
 -- автозапуск выключен). Подстраховка — rclone-drive-idle.timer.
--- Общий для основного конфига и файлпикера: require("gdrive-mount"):setup()
+-- Подключается в init.lua: require("gdrive-mount"):setup()
 
 local function setup()
 	local GD = os.getenv("HOME") .. "/Google Drive"

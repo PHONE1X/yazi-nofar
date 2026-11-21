@@ -2,10 +2,10 @@
 # Обёртка Yazi для xdg-desktop-portal-termfilechooser.
 #
 # Портал зовёт её, когда приложение просит системный диалог «Открыть» или
-# «Сохранить». Она запускает kitty с yazi на ОТДЕЛЬНОМ конфиге
-# ~/.config/yazi-picker (свои клавиши и подсказка в шапке) и ждёт, пока yazi
-# закроется. Выбранные пути пишутся в "$out", его читает портал; нет файла —
-# значит «Отмена».
+# «Сохранить». Она запускает kitty с обычным yazi (конфиг тот же,
+# ~/.config/yazi) и переменными YAZI_PICK*: по ним plugins/picker.yazi
+# включает поведение пикера и подсказку в шапке. Выбранные пути пишутся в
+# "$out", его читает портал; нет файла — значит «Отмена».
 #
 # Аргументы задаёт портал (man 5 xdg-desktop-portal-termfilechooser):
 #   $1 multiple  - 0/1, можно выбрать несколько файлов
@@ -29,11 +29,6 @@ if [ "$debug" = "1" ]; then
     set -x
 fi
 
-# Режим и куда писать результат читают picker/init.lua и plugins/picker.yazi.
-YAZI_CONFIG_HOME="${YAZI_PICKER_CONFIG:-$HOME/.config/yazi-picker}"
-YAZI_PICK_OUT="$out"
-export YAZI_CONFIG_HOME YAZI_PICK_OUT
-
 if [ "$save" = "1" ]; then
     YAZI_PICK=save
 elif [ "$directory" = "1" ]; then
@@ -43,12 +38,13 @@ elif [ "$multiple" = "1" ]; then
 else
     YAZI_PICK=open
 fi
-export YAZI_PICK
+YAZI_PICK_OUT="$out"
+export YAZI_PICK YAZI_PICK_OUT
 
 start="$path"
 if [ "$YAZI_PICK" = "save" ]; then
-    # Приложение предлагает папку/имя. Если такой файл уже есть, курсор встанет
-    # на него; если нет — откроется его папка, имя спросим при нажатии s.
+    # Приложение предлагает папку и имя. Есть такой файл — курсор встанет на
+    # него, нет — откроется его папка. Enter сохранит в ту папку, где стоишь.
     YAZI_PICK_NAME=$(basename -- "$path")
     export YAZI_PICK_NAME
     if [ ! -e "$path" ]; then
@@ -74,7 +70,15 @@ quote() {
     printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
 }
 
+# --chooser-file только для «Открыть»: там выбор пишет встроенный open yazi.
+# В «Сохранить» и «Папка» результат пишет plugins/picker.yazi, а без
+# chooser-file случайное o/O на файле просто откроет его, а не затрёт.
+chooser=""
+case "$YAZI_PICK" in
+    open|multi) chooser="--chooser-file=$(quote "$out")" ;;
+esac
+
 # app-id фиксированный: по нему правило Hyprland делает окно плавающим.
 termcmd="${TERMCMD:-kitty --app-id=termfilechooser --title=$(quote "$title")}"
 
-sh -c "$termcmd yazi --chooser-file=$(quote "$out") $(quote "$start")"
+sh -c "$termcmd yazi $chooser $(quote "$start")"

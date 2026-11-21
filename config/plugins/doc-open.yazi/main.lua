@@ -80,12 +80,18 @@ for _, e in ipairs {
 	"diff", "patch", "tex", "org", "nix", "vim", "el", "ex", "srt", "ass", "vtt",
 } do TEXT_EXT[e] = true end
 
-local function entry(self)
+local function entry(self, job)
+	-- yazi открыт как файлпикер (окно «Открыть» / «Сохранить» из приложения):
+	-- Enter и l решает plugins/picker.yazi (ему нужен async — там вопросы).
+	if os.getenv("YAZI_PICK") then
+		local action = job and job.args and job.args[1] or "enter"
+		ya.emit("plugin", { "picker", action })
+		return
+	end
+
 	local h = cx.active.current.hovered
 	if not h then return end
 
-	-- Файлпикер сюда не заходит: у него свой конфиг ~/.config/yazi-picker,
-	-- где Enter привязан к plugins/picker.yazi.
 	if h.cha.is_dir then
 		ya.emit("enter", { hovered = not self.open_multi })
 		return

@@ -69,6 +69,12 @@ ya.emit("plugin", { "openers", "boot" })
 
 
 -- Google Drive по требованию: rclone-mount поднимается, когда заходишь в
--- ~/Google Drive, и гасится, когда выходишь оттуда (общий с файлпикером
--- плагин plugins/gdrive-mount.yazi).
+-- ~/Google Drive, и гасится, когда выходишь оттуда (plugins/gdrive-mount.yazi).
 require("gdrive-mount"):setup()
+
+-- Файлпикер: тот же yazi, запущенный из окна «Открыть» / «Сохранить»
+-- (filepicker/yazi-wrapper.sh ставит YAZI_PICK). В шапке — что нужно и что
+-- жать; Enter/l в этом режиме обрабатывает plugins/picker.yazi.
+if os.getenv("YAZI_PICK") then
+	require("picker"):setup()
+end

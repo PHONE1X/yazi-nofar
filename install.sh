@@ -8,9 +8,10 @@
 #   ./install.sh             # то же без установки пакетов
 #   ./install.sh --uninstall
 #
-# Конфиги ставятся ССЫЛКАМИ на этот репозиторий: ~/.config/yazi -> config/,
-# ~/.config/yazi-picker -> picker/. Всё, что меняется в yazi (попап F,
-# закладки, ya pkg), сразу видно в `git status` — останется закоммитить.
+# Конфиг ставится ССЫЛКОЙ на этот репозиторий: ~/.config/yazi -> config/.
+# Он же работает и как файлпикер (режим включает обёртка портала). Всё, что
+# меняется в yazi (попап F, закладки, ya pkg), сразу видно в `git status` —
+# останется закоммитить.
 set -euo pipefail
 
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -56,7 +57,7 @@ render() {
 }
 
 uninstall() {
-    for l in "$cfg/yazi" "$cfg/yazi-picker" "$bin/yazi-open" "$bin/yazi-fm1" \
+    for l in "$cfg/yazi" "$bin/yazi-open" "$bin/yazi-fm1" \
              "$cfg/fish/functions/y.fish"; do
         [ -L "$l" ] && rm -f -- "$l" && echo "   убрано $l"
     done
@@ -84,10 +85,11 @@ if [ "${1:-}" = "--deps" ]; then
     fi
 fi
 
-say "Конфиги yazi"
+say "Конфиг yazi"
 link "$here/config" "$cfg/yazi"
-link "$here/picker" "$cfg/yazi-picker"
 link "$here/fish/y.fish" "$cfg/fish/functions/y.fish"
+# отдельного конфига файлпикера больше нет (был до 21.11.2026)
+[ -L "$cfg/yazi-picker" ] && rm -f -- "$cfg/yazi-picker"
 
 say "Команды yazi-open и yazi-fm1"
 chmod +x "$here/bin/yazi-open" "$here/bin/yazi-fm1"

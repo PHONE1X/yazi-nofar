@@ -1,12 +1,22 @@
 --- @since 25.5.31
--- Yazi в роли файлпикера: что делают Enter и s. Режим и куда писать
--- результат выставляет обёртка портала (filepicker/yazi-wrapper.sh):
+-- Yazi в роли файлпикера (окна «Открыть» / «Сохранить» в Telegram, браузере,
+-- Steam). Конфиг тот же, что у обычного yazi; этот плагин включается, только
+-- когда yazi запустила обёртка портала (filepicker/yazi-wrapper.sh). Она
+-- выставляет:
 --   YAZI_PICK       open | multi | dir | save
---   YAZI_PICK_OUT   файл с выбранными путями (его читает портал)
---   YAZI_PICK_NAME  имя файла, предложенное приложением (режим save)
--- Выход без записи в YAZI_PICK_OUT (q) — отмена.
+--   YAZI_PICK_OUT   куда записать выбранные пути (этот файл читает портал)
+--   YAZI_PICK_NAME  имя файла, которое предложило приложение (save)
+--
+-- Enter и l приходят сюда из doc-open:
+--   save  Enter — сохранить в папку, где стоишь (неважно, что под курсором);
+--         имя занято — 1 заменить / 2 другое имя / Esc отмена
+--   dir   Enter — выбрать папку, где стоишь
+--   open  Enter — файл выбрать, папку открыть; multi — то же для отмеченных
+--   l     в папку (в save/dir на файле ничего не делает)
+-- q (обычный выход) — отмена: портал не получает файла и ничего не делает.
+-- setup() из init.lua рисует в шапке, что сейчас нужно и что жать.
 
-local MODE = os.getenv("YAZI_PICK") or "open"
+local MODE = os.getenv("YAZI_PICK")
 local OUT = os.getenv("YAZI_PICK_OUT")
 local NAME = os.getenv("YAZI_PICK_NAME") or ""
 
@@ -16,13 +26,12 @@ local snapshot = ya.sync(function()
 	return {
 		cwd = tostring(cur.cwd),
 		hovered = h and tostring(h.url) or nil,
-		name = h and h.name or nil,
 		is_dir = h and h.cha.is_dir or false,
 	}
 end)
 
 local function say(content, level)
-	ya.notify { title = "Файлпикер", content = content, timeout = 4, level = level or "info" }
+	ya.notify { title = "Файлпикер", content = content, timeout = 5, level = level or "info" }
 end
 
 local function finish(paths)
@@ -47,79 +56,160 @@ local function join(dir, name)
 	return dir .. "/" .. name
 end
 
-local function ask_overwrite(name)
-	return ya.confirm {
-		pos = { "center", w = 64, h = 7 },
-		title = "Такой файл уже есть",
-		body = "Заменить «" .. name .. "»? Старое содержимое пропадёт.",
-	}
+-- «отчёт.pdf» -> «отчёт (1).pdf», первое свободное
+local function free_name(dir, name)
+	local stem, ext = name:match("^(.+)(%.[^.]+)$")
+	if not stem then
+		stem, ext = name, ""
+	end
+	for i = 1, 999 do
+		local cand = string.format("%s (%d)%s", stem, i, ext)
+		if not fs.cha(Url(join(dir, cand))) then
+			return cand
+		end
+	end
+	return name
 end
 
-local function save_here(st)
-	local value, event = ya.input {
-		pos = { "center", w = 64 },
-		title = "Сохранить в этой папке как:",
-		value = NAME,
-	}
-	if event ~= 1 or not value then
-		return
-	end
-	value = value:gsub("^%s+", ""):gsub("%s+$", "")
-	if value == "" then
-		return
-	end
-	if value:find("/", 1, true) then
-		return say("Только имя файла, без «/». Папку выбирают переходом в неё.", "warn")
-	end
-	local target = join(st.cwd, value)
-	local cha = fs.cha(Url(target))
-	if cha then
-		if cha.is_dir then
-			return say("«" .. value .. "» — это папка, нужно имя файла", "warn")
+local function ask_name(value)
+	while true do
+		local v, ev = ya.input {
+			pos = { "center", w = 64 },
+			title = "Сохранить под именем:",
+			value = value,
+		}
+		if ev ~= 1 or not v then
+			return nil
 		end
-		if not ask_overwrite(value) then
+		v = v:gsub("^%s+", ""):gsub("%s+$", "")
+		if v == "" then
+			return nil
+		end
+		if not v:find("/", 1, true) then
+			return v
+		end
+		say("Только имя, без «/». В другую папку — перейди в неё и жми Enter.", "warn")
+		value = v:gsub("/", "")
+	end
+end
+
+-- сохранить в dir под именем name; если такое имя уже занято — спросить
+local function save_into(dir, name)
+	while true do
+		local target = join(dir, name)
+		local cha = fs.cha(Url(target))
+		if not cha then
+			return finish { target }
+		end
+
+		local choice = 2
+		if cha.is_dir then
+			say("«" .. name .. "» — это папка, нужно другое имя", "warn")
+		else
+			-- уведомление тут не показываем: оно ложится поверх меню
+			choice = ya.which {
+				cands = {
+					{ on = "1", desc = "Заменить существующий «" .. name .. "»" },
+					{ on = "2", desc = "Сохранить под другим именем" },
+					{ on = "3", desc = "Отмена" },
+				},
+			}
+		end
+
+		if choice == 1 then
+			return finish { target }
+		elseif choice ~= 2 then
+			return
+		end
+		name = ask_name(free_name(dir, name))
+		if not name then
 			return
 		end
 	end
-	finish { target }
 end
 
 local function enter(st)
+	if MODE == "save" then
+		return save_into(st.cwd, NAME ~= "" and NAME or "file")
+	elseif MODE == "dir" then
+		return finish { st.cwd }
+	end
 	if not st.hovered then
 		return
 	end
 	if st.is_dir then
 		return ya.emit("enter", {})
 	end
-	if MODE == "open" then
-		-- встроенный open с --chooser-file пишет путь в файл портала и закрывает yazi
-		ya.emit("open", { hovered = true })
-	elseif MODE == "multi" then
-		ya.emit("open", {})
-	elseif MODE == "dir" then
-		say("Нужна папка: зайдите в неё и нажмите s")
-	elseif MODE == "save" then
-		if ask_overwrite(st.name) then
-			finish { st.hovered }
-		end
+	-- open/multi: встроенный open с --chooser-file пишет пути в файл портала
+	-- и закрывает yazi (multi — все отмеченные пробелом)
+	ya.emit("open", MODE == "open" and { hovered = true } or {})
+end
+
+local function nav(st)
+	if not st.hovered then
+		return
+	end
+	if st.is_dir then
+		return ya.emit("enter", {})
+	end
+	if MODE == "open" or MODE == "multi" then
+		return enter(st)
 	end
 end
 
-local function here(st)
-	if MODE == "dir" then
-		finish { st.cwd }
-	elseif MODE == "save" then
-		save_here(st)
-	else
-		enter(st)
+local LABEL = {
+	open = "ОТКРЫТЬ ФАЙЛ",
+	multi = "ОТКРЫТЬ ФАЙЛЫ",
+	dir = "ВЫБРАТЬ ПАПКУ",
+	save = "СОХРАНИТЬ",
+}
+
+local KEYS = {
+	open = { { "Enter", "выбрать" }, { "q", "отмена" } },
+	multi = { { "Пробел", "отметить" }, { "Enter", "выбрать" }, { "q", "отмена" } },
+	dir = { { "Enter", "выбрать эту папку" }, { "l h", "в папку / назад" }, { "q", "отмена" } },
+	save = { { "Enter", "сохранить сюда" }, { "l h", "в папку / назад" }, { "q", "отмена" } },
+}
+
+local function setup()
+	if not MODE then
+		return
 	end
+
+	Header:children_add(function()
+		local text = " " .. (LABEL[MODE] or LABEL.open)
+		if MODE == "save" and NAME ~= "" then
+			text = text .. " «" .. NAME .. "» в"
+		end
+		return ui.Line {
+			ui.Span(text .. " "):fg("black"):bg("yellow"):bold(),
+			ui.Span(" "),
+		}
+	end, 500, Header.LEFT)
+
+	Header:children_add(function()
+		local spans = {}
+		for i, k in ipairs(KEYS[MODE] or KEYS.open) do
+			if i > 1 then
+				spans[#spans + 1] = ui.Span("  ")
+			end
+			spans[#spans + 1] = ui.Span(k[1]):fg("yellow"):bold()
+			spans[#spans + 1] = ui.Span(" " .. k[2])
+		end
+		spans[#spans + 1] = ui.Span(" ")
+		return ui.Line(spans)
+	end, 500, Header.RIGHT)
 end
 
 return {
+	setup = setup,
 	entry = function(_, job)
+		if not MODE then
+			return
+		end
 		local st = snapshot()
-		if job.args[1] == "here" then
-			here(st)
+		if job.args[1] == "nav" then
+			nav(st)
 		else
 			enter(st)
 		end

@@ -1,1 +1,0 @@
-../config/bookmarks-data.lua
